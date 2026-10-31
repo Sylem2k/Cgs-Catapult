@@ -12,6 +12,10 @@ SCR_DestructibleEntity {
    ModelGeometry 1
    Static 1
   }
+  CGS_CatapultComponent "{D023BB7C12261001}" {
+   m_fUseRadius 12
+   m_fWindupSeconds 0.5
+  }
   ActionsManagerComponent "{6ABE6C8B5D9E62A5}" {
    ActionContexts {
     UserActionContext "{6ABE6C8B5B6459F7}" {
@@ -24,6 +28,11 @@ SCR_DestructibleEntity {
     }
    }
    additionalActions {
+    CGS_CatapultFireEmptyAction "{D023BB7C12261002}" {
+     UIInfo UIInfo "{D023BB7C12261003}" {
+      Name "FIRE EMPTY - TEST"
+     }
+    }
     CGS_CatapultLaunchAction "{6ABE6C8B03BDFA42}" {
      UIInfo UIInfo "{6ABE6C8B125054F5}" {
       Name "Launch"
