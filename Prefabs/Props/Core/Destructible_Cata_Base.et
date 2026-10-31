@@ -13,30 +13,41 @@ SCR_DestructibleEntity {
    Static 1
   }
   CGS_CatapultComponent "{D023BB7C12261001}" {
-   m_fUseRadius 12
+   m_bEnabled 1
+   m_fUseRadius 15
    m_fWindupSeconds 0.5
   }
   ActionsManagerComponent "{6ABE6C8B5D9E62A5}" {
    ActionContexts {
     UserActionContext "{6ABE6C8B5B6459F7}" {
-     UIInfo UIInfo "{6ABE6C8B588BF331}" {
-      Name "launch"
-     }
+     ContextName "default"
      Position PointInfo "{6ABE6C8B2217AF0F}" {
-      Offset 0 0.721 -5.2091
+      Offset 0 1.05 0
      }
+     Radius 50
+     Omnidirectional 1
+     VisibilityAngle 180
+     FilterActionsUsingCache 0
     }
    }
    additionalActions {
     CGS_CatapultFireEmptyAction "{D023BB7C12261002}" {
-     UIInfo UIInfo "{D023BB7C12261003}" {
-      Name "FIRE EMPTY - TEST"
+     ParentContextList {
+      "default"
      }
+     UIInfo UIInfo "{D023BB7C12261003}" {
+      Name "CATAPULT: FIRE EMPTY (TEST)"
+     }
+     VisibilityRange 15
     }
     CGS_CatapultLaunchAction "{6ABE6C8B03BDFA42}" {
-     UIInfo UIInfo "{6ABE6C8B125054F5}" {
-      Name "Launch"
+     ParentContextList {
+      "default"
      }
+     UIInfo UIInfo "{6ABE6C8B125054F5}" {
+      Name "CATAPULT: LAUNCH PLAYER (TEST)"
+     }
+     VisibilityRange 15
     }
    }
   }
