@@ -13,7 +13,7 @@ class CGS_CatapultComponent : ScriptComponent
 	[Attribute("true", UIWidgets.CheckBox, "Enable catapult player launch test.", category: "Catapult Test")]
 	protected bool m_bEnabled;
 
-	[Attribute("6.5", UIWidgets.Auto, "How close to the catapult origin a player must be to trigger it, in meters.", category: "Catapult Test")]
+	[Attribute("12", UIWidgets.Auto, "How close to the catapult origin a player must be to trigger it, in meters.", category: "Catapult Test")]
 	protected float m_fUseRadius;
 
 	[Attribute("3", UIWidgets.Auto, "Horizontal speed in m/s. Start at 3 (proven Portal_Test value).", category: "Catapult Test")]
@@ -34,13 +34,16 @@ class CGS_CatapultComponent : ScriptComponent
 	[Attribute("0.08", UIWidgets.Auto, "Delay after one-time lift before assigning physics velocity.", category: "Catapult Test")]
 	protected float m_fReleaseDelay;
 
+	[Attribute("1.5", UIWidgets.Auto, "Empty-fire reset timer in seconds; diagnostic only until animation playback is connected.", category: "Catapult Test")]
+	protected float m_fEmptyResetSeconds;
+
 	[Attribute("false", UIWidgets.CheckBox, "Flip the computed horizontal launch direction.", category: "Catapult Test")]
 	protected bool m_bReverseDirection;
 
 	[Attribute(desc: "Optional launch-direction gizmo. Place on the open tray nose; local blue Z points OUT of the catapult. Overrides fallback owner local X direction.", category: "Catapult Test")]
 	protected ref PointInfo m_LaunchPoint;
 
-	// Stages: 0 idle, 1 windup, 2 lifted/releasing, 3 native-flight probe.
+	// Stages: 0 idle, 1-3 player test, 4 empty windup, 5 empty reset.
 	protected int m_iStage;
 	protected IEntity m_pTestPlayer;
 	protected float m_fStageTime;
@@ -92,6 +95,32 @@ class CGS_CatapultComponent : ScriptComponent
 		if (m_bReverseDirection)
 			direction = direction * -1.0;
 		return direction;
+	}
+
+
+	// Empty test: the operator activates the catapult with no payload on the tray.
+	// This verifies action wiring and launch timing. Visual bone animation is not
+	// driven until an animation graph/controller is configured.
+	bool ServerFireEmpty(IEntity user)
+	{
+		if (!Replication.IsServer() || !CanOffer(user) || !GetGame() || m_iStage != 0)
+			return false;
+		BaseWorld world = GetGame().GetWorld();
+		PlayerManager players = GetGame().GetPlayerManager();
+		if (!world || !players)
+			return false;
+		int id = players.GetPlayerIdFromControlledEntity(user);
+		if (id <= 0 || players.GetPlayerControlledEntity(id) != user)
+			return false;
+		float now = world.GetWorldTime() * 0.001;
+		if (now < m_fNextReadyTime)
+			return false;
+
+		m_fStageTime = Math.Max(m_fWindupSeconds, 0.1);
+		m_iStage = 4;
+		m_fNextReadyTime = now + Math.Max(m_fCooldownSeconds, 1.0);
+		Print(string.Format("[CGS CATAPULT] EMPTY ARMING operator=%1 windup=%2 (no target required)", id, m_fStageTime));
+		return true;
 	}
 
 	bool ServerLaunchPlayer(IEntity user)
@@ -146,6 +175,28 @@ class CGS_CatapultComponent : ScriptComponent
 	{
 		if (!Replication.IsServer() || m_iStage == 0)
 			return;
+
+		// Empty firing cycle runs independently of any character/vehicle entity.
+		float dt = Math.Max(timeSlice, 0.0);
+		if (m_iStage == 4)
+		{
+			m_fStageTime -= dt;
+			if (m_fStageTime > 0)
+				return;
+			Print("[CGS CATAPULT] EMPTY FIRE CUE (animation not yet connected)");
+			m_iStage = 5;
+			m_fStageTime = Math.Max(m_fEmptyResetSeconds, 0.1);
+			return;
+		}
+		if (m_iStage == 5)
+		{
+			m_fStageTime -= dt;
+			if (m_fStageTime > 0)
+				return;
+			Print("[CGS CATAPULT] EMPTY RESET complete; ready after cooldown");
+			m_iStage = 0;
+			return;
+		}
 		if (!m_pTestPlayer || !m_pTestPlayer.GetPhysics())
 		{
 			Print("[CGS CATAPULT] Launch cancelled: target/player physics unavailable", LogLevel.WARNING);
@@ -154,7 +205,6 @@ class CGS_CatapultComponent : ScriptComponent
 			return;
 		}
 
-		float dt = Math.Max(timeSlice, 0.0);
 		if (m_iStage == 1)
 		{
 			m_fStageTime -= dt;
