@@ -54,3 +54,18 @@ I retained my catapult's own `CGS_CatapultComponent`, `CGS_CatapultFireEmptyActi
 
 **Separate animation status:** The imported `capapult.fbx` still has its originally raised baked rest pose. The lowered rest export script is in `Tools/Blender/` but I still need to run it in my Blender source project and reimport the FBX through Workbench. The FIRE EMPTY action is a logic/timer probe, not a visual arm animation or a car launcher.
 
+
+## Standalone diagnostics after startup-only Workbench log (2026-10-31)
+
+My Workbench session showed the catapult's initialization log, then only ordinary game startup messages. There was no FIRE or launch message. That does **not** establish that physics failed; it means no action execution was captured.
+
+To isolate the problem without needing a car, a passenger, or even a visible F-menu button, I added an **automatic one-time empty firing cycle** to the existing test prefab:
+
+- `CGS_CatapultComponent.c` has editor properties `m_bAutoEmptyTestOnSpawn` and `m_fAutoEmptyTestDelaySeconds`, implemented using the component's existing server `EOnFrame` event.
+- Only `Destructible_Cata_Base.et` enables `m_bAutoEmptyTestOnSpawn 1` and sets a **3-second** delay.
+- After the catapult exists in a running world for three seconds, I should see `[CGS CATAPULT] EMPTY ARMING AUTO diagnostic`, then `EMPTY FIRE CUE`, then `EMPTY RESET`. There is no projectile or character launch and no physical arm animation at this stage.
+- In both `CGS_CatapultFireEmptyAction.c` and `CGS_CatapultLaunchAction.c`, I changed `CanBeShownScript` to depend only on the actor being a character. The normal action context's 15 m `VisibilityRange` still limits visibility. `CanBePerformedScript` provides disabled reasons if the catapult component is absent or the player is too far away. Clicking either action also writes a clear server log, including refusal reasons.
+- This opt-in test is temporary. I will set the prefab flag back to 0 after button/physics/animation tests so production catapults do not auto-fire at spawn.
+
+**My next test:** Pull `main`, compile Game scripts, and reload a fresh world instance. Without touching the controls, I watch the log for the three AUTO EMPTY phase messages. If they appear but the F-menu is missing, the failure is action visibility/selection rather than frame timing. If only the startup message appears, I must investigate whether `EOnFrame` is called on this static destructible entity. The FBX is still originally posed raised and the catapult arm visual animation is still not connected; the automatic test does not falsely claim either is working. I must send the Workbench compiler errors exactly if compilation fails.
+
