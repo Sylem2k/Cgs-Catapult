@@ -56,7 +56,10 @@ class CGS_CatapultComponent : ScriptComponent
 	{
 		super.OnPostInit(owner);
 		if (Replication.IsServer())
+		{
 			SetEventMask(owner, EntityEvent.FRAME);
+			Print("[CGS CATAPULT] Component initialized on server; default-context launch controls ready for testing");
+		}
 	}
 
 	bool CanOffer(IEntity user)
