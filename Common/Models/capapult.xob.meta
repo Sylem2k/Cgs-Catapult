@@ -1,0 +1,74 @@
+MetaFileClass {
+ Name "{A184F423B3757BCF}Common/Models/capapult.xob"
+ Configurations {
+  FBXResourceClass PC {
+   ExportSkinning 1
+   Rotate 0 90 0
+   MaterialAssigns {
+    MaterialAssignClass "{6ABE66AF120C8238}" {
+     SourceMaterial "CGS_Mat_173_104_053"
+     AssignedMaterial "{0C6D4E32B28CB3A5}Common/Models/Data/CGS_Mat_173_104_053.emat"
+    }
+    MaterialAssignClass "{6ABE66AF120C820F}" {
+     SourceMaterial "CGS_Mat_198_128_064"
+     AssignedMaterial "{A2DEC85822083B7C}Common/Models/Data/CGS_Mat_198_128_064.emat"
+    }
+    MaterialAssignClass "{6ABE66AF120C820D}" {
+     SourceMaterial "CGS_Mat_150_158_160"
+     AssignedMaterial "{9198D344D8279092}Common/Models/Data/CGS_Mat_150_158_160.emat"
+    }
+    MaterialAssignClass "{6ABE66AF120C8211}" {
+     SourceMaterial "CGS_Mat_066_075_079"
+     AssignedMaterial "{E3BACA8B4EC0E2A5}Common/Models/Data/CGS_Mat_066_075_079.emat"
+    }
+    MaterialAssignClass "{6ABE66AF120C8214}" {
+     SourceMaterial "CGS_Mat_109_117_119"
+     AssignedMaterial "{EB2310CCA60784F1}Common/Models/Data/CGS_Mat_109_117_119.emat"
+    }
+    MaterialAssignClass "{6ABE66AF120C821A}" {
+     SourceMaterial "CGS_Mat_116_123_128"
+     AssignedMaterial "{A6ACEF218DEB1A5B}Common/Models/Data/CGS_Mat_116_123_128.emat"
+    }
+    MaterialAssignClass "{6ABE66AF120C821B}" {
+     SourceMaterial "CGS_Mat_089_098_104"
+     AssignedMaterial "{8CC255CE97BA42A4}Common/Models/Data/CGS_Mat_089_098_104.emat"
+    }
+    MaterialAssignClass "{6ABE66AF120C821E}" {
+     SourceMaterial "CGS_Mat_042_047_050"
+     AssignedMaterial "{26C48FBBB9DA32C6}Common/Models/Data/CGS_Mat_042_047_050.emat"
+    }
+   }
+   MeshParams {
+    MeshParam CGS_Catapult_Arm {
+    }
+    MeshParam CGS_Catapult_Base {
+    }
+   }
+   Common TXOCommonClass "{6ABE66AF1204399E}" : "{0877E7C4BB2B2C9A}Configs/System/ResourceTypes/PC/MeshObjectCommon.conf" {
+   }
+   ApplicationVendor "Blender Foundation"
+   ApplicationName "Blender (stable FBX IO)"
+   ApplicationVersion "4.5.14 LTS"
+  }
+  FBXResourceClass XBOX_ONE : PC {
+   Common TXOCommonClass "{6ABE66AF12043BB2}" : "{9D5B6207F7628CE2}Configs/System/ResourceTypes/XBOX_ONE/MeshObjectCommon.conf" {
+   }
+  }
+  FBXResourceClass XBOX_SERIES : PC {
+   Common TXOCommonClass "{6ABE66AF12043BD1}" : "{DD9F02115C764647}Configs/System/ResourceTypes/XBOX_SERIES/MeshObjectCommon.conf" {
+   }
+  }
+  FBXResourceClass PS4 : PC {
+   Common TXOCommonClass "{6ABE66AF12043A1E}" : "{53EC476BC921D99A}Configs/System/ResourceTypes/PS4/MeshObjectCommon.conf" {
+   }
+  }
+  FBXResourceClass PS5 : PC {
+   Common TXOCommonClass "{6ABE66AF12043A5F}" : "{F62AA8E7B8EA9D26}Configs/System/ResourceTypes/PS5/MeshObjectCommon.conf" {
+   }
+  }
+  FBXResourceClass HEADLESS : PC {
+   Common TXOCommonClass "{6ABE66AF12043A98}" : "{3A5B3356978039E8}Configs/System/ResourceTypes/HEADLESS/MeshObjectCommon.conf" {
+   }
+  }
+ }
+}

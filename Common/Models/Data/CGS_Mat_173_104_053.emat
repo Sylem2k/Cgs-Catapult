@@ -1,0 +1,4 @@
+MatPBRBasic {
+ BCRMap "{282B86F9CE605A69}Common/Models/Data/Position (World).edds"
+ OpacityMap "{E70D2695E16930CC}Common/Models/Data/Low Poly World Normal.edds"
+}

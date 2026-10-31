@@ -1,0 +1,22 @@
+SCR_DestructibleEntity {
+ ID "6ABE66AE6D81AB4F"
+ components {
+  MeshObject "{6ABE66AE6D81AB80}" {
+   LODFactors {
+    5 2 1.5 1 1 1
+   }
+  }
+  RigidBody "{6ABE66AE6D81ABEE}" {
+   ResponseIndex "TinyDestructible"
+   ModelGeometry 1
+   Static 1
+  }
+ }
+ Flags 0x403 0
+ DamageThreshold 1
+ FirstDestructionPhase SCR_BaseDestructionPhase "{6ABE66AE6D81ABF3}" {
+ }
+ LastDestructionPhase SCR_BaseDestructionPhase "{6ABE66AE6D81ABF1}" {
+  Threshold 0
+ }
+}
