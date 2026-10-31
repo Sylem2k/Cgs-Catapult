@@ -34,3 +34,23 @@ This is uncompiled first-pass Enfusion code; don't treat a successful commit as 
 ## Process
 
 I keep the original `capapult.fbx` and Enfusion script filenames, push code updates to this repository, and maintain these notes in first person.
+
+## Mech Throw action visibility port (2026-10-31)
+
+I compared my actual in-use MechWarrior project prefabs `Prefabs/Vehicles/Mech/Frames/Light/Light_Mech_Frame_B.et` and `Prefabs/Vehicles/Mech/Frames/Medium/Med_Mech_Frame_B.et`, along with the corresponding `CGS_MechTacticalThrowAction.c` in `Mech-Core-CGS`.
+
+**What I found:** Mech Throw uses a `UserActionContext` whose `ContextName` is `default`, and each `additionalActions` entry specifies `ParentContextList { "default" }` and `VisibilityRange 8`. My catapult had a context with no `ContextName`, action entries without `ParentContextList`, and an interaction point shifted 5.2 m to one end. That is why the scripts could be present but the interaction buttons were not properly registered for display.
+
+**What I changed in `Destructible_Cata_Base.et`:**
+- Restored `ContextName "default"` and moved the interaction point to `Offset 0 1.05 0`.
+- Set context `Radius 50`, `Omnidirectional 1`, `VisibilityAngle 180`, and `FilterActionsUsingCache 0`.
+- Set both action entries' `ParentContextList` to `default` and `VisibilityRange 15`.
+- Explicitly enabled `CGS_CatapultComponent` and set its use radius to 15 m.
+- Preserved original entity ID, imported mesh reference, static rigid body, component IDs, and original action class/file names.
+
+I retained my catapult's own `CGS_CatapultComponent`, `CGS_CatapultFireEmptyAction`, and `CGS_CatapultLaunchAction` rather than copying `CGS_MechBrainComponent`. That mech brain has faction/companion-claim/order dependencies that a stationary catapult does not need. I also added a one-time component startup log: `[CGS CATAPULT] Component initialized on server; default-context launch controls ready for testing`.
+
+**My next manual validation:** Pull `main` and compile Game scripts. Spawn or reload `Destructible_Cata_Base.et` (not an old saved world instance), approach within 15 m, then use the standard Reforger interaction menu (usually hold F). I should see `CATAPULT: FIRE EMPTY (TEST)` and `CATAPULT: LAUNCH PLAYER (TEST)`. The first requires no payload and should log EMPTY ARMING, EMPTY FIRE CUE, EMPTY RESET. The second launches the **operator** only and is unsafe near obstacles. If the action remains missing, check the startup log first; an absent startup log suggests the prefab or Game script module did not load. These changes are not yet Workbench-compiled or runtime-verified.
+
+**Separate animation status:** The imported `capapult.fbx` still has its originally raised baked rest pose. The lowered rest export script is in `Tools/Blender/` but I still need to run it in my Blender source project and reimport the FBX through Workbench. The FIRE EMPTY action is a logic/timer probe, not a visual arm animation or a car launcher.
+
