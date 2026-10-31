@@ -24,26 +24,41 @@ class CGS_CatapultLaunchAction : ScriptedUserAction
 		return true;
 	}
 
+	// Keep the action visible when the context is in range, so a missing
+	// controller shows a disabled action rather than hiding all diagnostics.
 	override bool CanBeShownScript(IEntity user)
 	{
-		CGS_CatapultComponent catapult = GetCatapult();
-		return catapult && catapult.CanOffer(user);
+		return ChimeraCharacter.Cast(user) != null;
 	}
 
 	override bool CanBePerformedScript(IEntity user)
 	{
-		if (CanBeShownScript(user))
-			return true;
-		SetCannotPerformReason("Get near the catapult to launch");
-		return false;
+		CGS_CatapultComponent catapult = GetCatapult();
+		if (!catapult)
+		{
+			SetCannotPerformReason("Catapult component missing");
+			return false;
+		}
+		if (!catapult.CanOffer(user))
+		{
+			SetCannotPerformReason("Catapult disabled or too far away");
+			return false;
+		}
+		return true;
 	}
 
 	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
 	{
 		if (!Replication.IsServer())
 			return;
+		Print("[CGS CATAPULT] LAUNCH PLAYER action invoked on server");
 		CGS_CatapultComponent catapult = GetCatapult();
-		if (catapult)
-			catapult.ServerLaunchPlayer(pUserEntity);
+		if (!catapult)
+		{
+			Print("[CGS CATAPULT] LAUNCH PLAYER refused: component missing", LogLevel.WARNING);
+			return;
+		}
+		if (!catapult.ServerLaunchPlayer(pUserEntity))
+			Print("[CGS CATAPULT] LAUNCH PLAYER refused: range, body, busy state or cooldown", LogLevel.WARNING);
 	}
 }
