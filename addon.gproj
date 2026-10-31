@@ -1,0 +1,8 @@
+GameProject {
+ ID "CgsCatapult"
+ GUID "6ABE5C377C995D7E"
+ TITLE "Cgs Catapult"
+ Dependencies {
+  "58D0FB3206B6F859"
+ }
+}
