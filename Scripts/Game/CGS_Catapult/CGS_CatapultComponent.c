@@ -37,6 +37,15 @@ class CGS_CatapultComponent : ScriptComponent
 	[Attribute("1.5", UIWidgets.Auto, "Empty-fire reset timer in seconds; diagnostic only until animation playback is connected.", category: "Catapult Test")]
 	protected float m_fEmptyResetSeconds;
 
+	[Attribute("false", UIWidgets.CheckBox, "Diagnostic: run ONE payload-free firing cycle after spawn. Enable only on test prefab.", category: "Catapult Test Diagnostics")]
+	protected bool m_bAutoEmptyTestOnSpawn;
+
+	[Attribute("3", UIWidgets.Auto, "Seconds after loading to start the one-time empty test.", category: "Catapult Test Diagnostics")]
+	protected float m_fAutoEmptyTestDelaySeconds;
+
+	protected bool m_bAutoEmptyTestPending;
+	protected float m_fAutoEmptyTestCountdown;
+
 	[Attribute("false", UIWidgets.CheckBox, "Flip the computed horizontal launch direction.", category: "Catapult Test")]
 	protected bool m_bReverseDirection;
 
@@ -58,7 +67,9 @@ class CGS_CatapultComponent : ScriptComponent
 		if (Replication.IsServer())
 		{
 			SetEventMask(owner, EntityEvent.FRAME);
-			Print("[CGS CATAPULT] Component initialized on server; default-context launch controls ready for testing");
+			m_bAutoEmptyTestPending = m_bAutoEmptyTestOnSpawn;
+			m_fAutoEmptyTestCountdown = Math.Max(m_fAutoEmptyTestDelaySeconds, 1.0);
+			Print(string.Format("[CGS CATAPULT] Component initialized on server; emptyAutoTest=%1 after=%2 seconds", m_bAutoEmptyTestPending, m_fAutoEmptyTestCountdown));
 		}
 	}
 
@@ -176,11 +187,30 @@ class CGS_CatapultComponent : ScriptComponent
 
 	override void EOnFrame(IEntity owner, float timeSlice)
 	{
-		if (!Replication.IsServer() || m_iStage == 0)
+		if (!Replication.IsServer())
+			return;
+
+		float dt = Math.Max(timeSlice, 0.0);
+		if (m_bAutoEmptyTestPending)
+		{
+			m_fAutoEmptyTestCountdown -= dt;
+			if (m_fAutoEmptyTestCountdown <= 0)
+			{
+				m_bAutoEmptyTestPending = false;
+				if (m_iStage == 0)
+				{
+					m_iStage = 4;
+					m_fStageTime = Math.Max(m_fWindupSeconds, 0.1);
+					Print(string.Format("[CGS CATAPULT] EMPTY ARMING AUTO diagnostic (windup=%1) - no button or payload required", m_fStageTime));
+				}
+				else
+					Print("[CGS CATAPULT] Auto diagnostic skipped; another firing cycle is running");
+			}
+		}
+		if (m_iStage == 0)
 			return;
 
 		// Empty firing cycle runs independently of any character/vehicle entity.
-		float dt = Math.Max(timeSlice, 0.0);
 		if (m_iStage == 4)
 		{
 			m_fStageTime -= dt;
