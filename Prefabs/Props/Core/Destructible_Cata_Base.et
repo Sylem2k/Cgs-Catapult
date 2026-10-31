@@ -16,6 +16,8 @@ SCR_DestructibleEntity {
    m_bEnabled 1
    m_fUseRadius 15
    m_fWindupSeconds 0.5
+   m_bAutoEmptyTestOnSpawn 1
+   m_fAutoEmptyTestDelaySeconds 3
   }
   ActionsManagerComponent "{6ABE6C8B5D9E62A5}" {
    ActionContexts {
