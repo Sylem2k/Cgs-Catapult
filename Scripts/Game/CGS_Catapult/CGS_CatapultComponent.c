@@ -1,76 +1,119 @@
-// CGS Catapult - Phase 1: Native player launch test (Enfusion / Arma Reforger 1.8)
-// Stand on or beside the tray and use the CGS_CatapultLaunchAction.
-// Uses the proven one-time character release followed by physics SetVelocity.
-// This is not yet safe for occupied vehicles, crowded servers, roofs or gameplay use.
+// CGS Catapult - Phase 1 launch controller, CallQueue-driven.
+// Arma Reforger 1.8.0.13; designed for STATIC SCR_DestructibleEntity prefabs.
+// Based on the working GetGame().GetCallqueue().CallLater timer pattern in Mech Core.
+// Does not depend on EOnFrame to advance a firing sequence.
+// Test-only: no arm animation, safe landing, roof clearance, or vehicle launching yet.
 
-[ComponentEditorProps(category: "CGS Catapult", description: "Phase 1: server-authoritative native player launch; experimental")]
+[ComponentEditorProps(category: "CGS Catapult", description: "Experimental server-side catapult player launch and empty fire test")]
 class CGS_CatapultComponentClass : ScriptComponentClass
 {
 }
 
 class CGS_CatapultComponent : ScriptComponent
 {
-	[Attribute("true", UIWidgets.CheckBox, "Enable catapult player launch test.", category: "Catapult Test")]
+	[Attribute("true", UIWidgets.CheckBox, "Enable the catapult's test actions.", category: "Catapult Test")]
 	protected bool m_bEnabled;
 
-	[Attribute("12", UIWidgets.Auto, "How close to the catapult origin a player must be to trigger it, in meters.", category: "Catapult Test")]
+	[Attribute("15", UIWidgets.Auto, "Maximum distance from catapult origin to operator (metres).", category: "Catapult Test")]
 	protected float m_fUseRadius;
 
-	[Attribute("3", UIWidgets.Auto, "Horizontal speed in m/s. Start at 3 (proven Portal_Test value).", category: "Catapult Test")]
+	[Attribute("3", UIWidgets.Auto, "Forward speed (m/s), conservative first test.", category: "Catapult Test")]
 	protected float m_fForwardSpeed;
 
-	[Attribute("6", UIWidgets.Auto, "Upward speed in m/s. Start at 6 (proven Portal_Test value).", category: "Catapult Test")]
+	[Attribute("6", UIWidgets.Auto, "Upward speed (m/s), conservative first test.", category: "Catapult Test")]
 	protected float m_fUpSpeed;
 
-	[Attribute("8", UIWidgets.Auto, "Time in seconds between launches.", category: "Catapult Test")]
+	[Attribute("8", UIWidgets.Auto, "Minimum seconds between firing cycles.", category: "Catapult Test")]
 	protected float m_fCooldownSeconds;
 
-	[Attribute("0", UIWidgets.Auto, "Pre-launch windup in seconds; increase once the arm animation is wired.", category: "Catapult Test")]
+	[Attribute("0.5", UIWidgets.Auto, "Seconds between ARMING and release or empty-fire cue.", category: "Catapult Test")]
 	protected float m_fWindupSeconds;
 
-	[Attribute("1.2", UIWidgets.Auto, "One-time lift to release the grounded character from the tray, in meters.", category: "Catapult Test")]
+	[Attribute("1.2", UIWidgets.Auto, "One-time upward player lift before physics launch (metres).", category: "Catapult Test")]
 	protected float m_fReleaseLift;
 
-	[Attribute("0.08", UIWidgets.Auto, "Delay after one-time lift before assigning physics velocity.", category: "Catapult Test")]
+	[Attribute("0.08", UIWidgets.Auto, "Seconds after lift before assigning native launch velocity.", category: "Catapult Test")]
 	protected float m_fReleaseDelay;
 
-	[Attribute("1.5", UIWidgets.Auto, "Empty-fire reset timer in seconds; diagnostic only until animation playback is connected.", category: "Catapult Test")]
+	[Attribute("1.5", UIWidgets.Auto, "Time between EMPTY FIRE CUE and EMPTY RESET, seconds.", category: "Catapult Test")]
 	protected float m_fEmptyResetSeconds;
 
-	[Attribute("false", UIWidgets.CheckBox, "Diagnostic: run ONE payload-free firing cycle after spawn. Enable only on test prefab.", category: "Catapult Test Diagnostics")]
-	protected bool m_bAutoEmptyTestOnSpawn;
-
-	[Attribute("3", UIWidgets.Auto, "Seconds after loading to start the one-time empty test.", category: "Catapult Test Diagnostics")]
-	protected float m_fAutoEmptyTestDelaySeconds;
-
-	protected bool m_bAutoEmptyTestPending;
-	protected float m_fAutoEmptyTestCountdown;
-
-	[Attribute("false", UIWidgets.CheckBox, "Flip the computed horizontal launch direction.", category: "Catapult Test")]
+	[Attribute("false", UIWidgets.CheckBox, "Reverse the launch direction.", category: "Catapult Test")]
 	protected bool m_bReverseDirection;
 
-	[Attribute(desc: "Optional launch-direction gizmo. Place on the open tray nose; local blue Z points OUT of the catapult. Overrides fallback owner local X direction.", category: "Catapult Test")]
+	[Attribute(desc: "Optional launch direction. Blue local Z points out of the open tray. If unset, use entity local X.", category: "Catapult Test")]
 	protected ref PointInfo m_LaunchPoint;
 
-	// Stages: 0 idle, 1-3 player test, 4 empty windup, 5 empty reset.
+	[Attribute("false", UIWidgets.CheckBox, "TEST ONLY: run one empty fire automatically after spawning.", category: "Catapult Test Diagnostics")]
+	protected bool m_bAutoEmptyTestOnSpawn;
+
+	[Attribute("3", UIWidgets.Auto, "Delay in seconds before the one-shot automatic empty fire.", category: "Catapult Test Diagnostics")]
+	protected float m_fAutoEmptyTestDelaySeconds;
+
+	// 0=ready, 1=player windup, 2=player lifted, 3=player physics probe,
+	// 4=empty windup, 5=empty reset.
 	protected int m_iStage;
 	protected IEntity m_pTestPlayer;
-	protected float m_fStageTime;
-	protected float m_fProbeElapsed;
-	protected float m_fNextReadyTime;
 	protected vector m_vLaunchVelocity;
 	protected vector m_vProbeStart;
+	protected float m_fNextReadyTime;
+	protected bool m_bWasDeleted;
 
+	// A static destructible prefab may not deliver EntityEvent.FRAME.
+	// These timed callbacks run through the game call queue instead.
 	override void OnPostInit(IEntity owner)
 	{
 		super.OnPostInit(owner);
-		if (Replication.IsServer())
+		if (!Replication.IsServer())
+			return;
+
+		ScriptCallQueue queue = GetQueue();
+		Print(string.Format("[CGS CATAPULT] INIT callQueue=%1 autoEmpty=%2 delay=%3; no EOnFrame required", queue != null, m_bAutoEmptyTestOnSpawn, m_fAutoEmptyTestDelaySeconds));
+		if (!queue)
 		{
-			SetEventMask(owner, EntityEvent.FRAME);
-			m_bAutoEmptyTestPending = m_bAutoEmptyTestOnSpawn;
-			m_fAutoEmptyTestCountdown = Math.Max(m_fAutoEmptyTestDelaySeconds, 1.0);
-			Print(string.Format("[CGS CATAPULT] Component initialized on server; emptyAutoTest=%1 after=%2 seconds", m_bAutoEmptyTestPending, m_fAutoEmptyTestCountdown));
+			Print("[CGS CATAPULT] ERROR: game call queue unavailable; cannot schedule launch stages", LogLevel.ERROR);
+			return;
 		}
+
+		if (m_bAutoEmptyTestOnSpawn)
+		{
+			int ms = (int)(Math.Max(m_fAutoEmptyTestDelaySeconds, 0.2) * 1000.0);
+			queue.CallLater(StartAutoEmptyTest, ms, false);
+			Print(string.Format("[CGS CATAPULT] AUTO EMPTY scheduled in %1ms", ms));
+		}
+	}
+
+	protected ScriptCallQueue GetQueue()
+	{
+		if (!GetGame())
+			return null;
+		return GetGame().GetCallqueue();
+	}
+
+	protected void QueueAdvance(float seconds)
+	{
+		ScriptCallQueue queue = GetQueue();
+		if (!queue)
+		{
+			Print("[CGS CATAPULT] ERROR: scheduling stage failed (call queue unavailable)", LogLevel.ERROR);
+			ResetStage();
+			return;
+		}
+		int ms = (int)(Math.Max(seconds, 0.01) * 1000.0);
+		queue.CallLater(AdvanceStage, ms, false);
+	}
+
+	protected void ResetStage()
+	{
+		m_iStage = 0;
+		m_pTestPlayer = null;
+	}
+
+	protected float GetNowSeconds()
+	{
+		if (!GetGame() || !GetGame().GetWorld())
+			return 0;
+		return GetGame().GetWorld().GetWorldTime() * 0.001;
 	}
 
 	bool CanOffer(IEntity user)
@@ -82,14 +125,27 @@ class CGS_CatapultComponent : ScriptComponent
 		return vector.DistanceSq(user.GetOrigin(), GetOwner().GetOrigin()) <= radius * radius;
 	}
 
+	protected bool ValidateOperator(IEntity user)
+	{
+		if (!Replication.IsServer() || !CanOffer(user) || !GetGame())
+			return false;
+
+		PlayerManager manager = GetGame().GetPlayerManager();
+		if (!manager)
+			return false;
+
+		int id = manager.GetPlayerIdFromControlledEntity(user);
+		return id > 0 && manager.GetPlayerControlledEntity(id) == user;
+	}
+
 	protected vector GetLaunchDirection()
 	{
 		IEntity owner = GetOwner();
 		if (!owner)
 			return vector.Zero;
 
-		// Blender source catapult: +X = out of tray. When a PointInfo is configured,
-		// follow its blue +Z axis instead to avoid FBX/import-axis ambiguity.
+		// Original Blender model opens along local +X. The optional PointInfo
+		// follows its local blue Z instead, to handle import-axis differences.
 		vector direction = owner.GetTransformAxis(0);
 		if (m_LaunchPoint)
 		{
@@ -111,186 +167,154 @@ class CGS_CatapultComponent : ScriptComponent
 		return direction;
 	}
 
+	// Diagnostic trigger. Can run without a payload or a player interaction.
+	protected void StartAutoEmptyTest()
+	{
+		if (m_bWasDeleted || !Replication.IsServer() || !GetOwner())
+			return;
+		if (!m_bEnabled || m_iStage != 0)
+		{
+			Print("[CGS CATAPULT] AUTO EMPTY skipped (disabled or currently firing)", LogLevel.WARNING);
+			return;
+		}
 
-	// Empty test: the operator activates the catapult with no payload on the tray.
-	// This verifies action wiring and launch timing. Visual bone animation is not
-	// driven until an animation graph/controller is configured.
+		Print("[CGS CATAPULT] AUTO EMPTY callback reached; starting cycle");
+		StartEmptyCycle(true);
+	}
+
+	protected void StartEmptyCycle(bool automatic)
+	{
+		if (m_bWasDeleted || m_iStage != 0)
+			return;
+
+		m_iStage = 4;
+		m_fNextReadyTime = GetNowSeconds() + Math.Max(m_fCooldownSeconds, 1.0);
+		float windup = Math.Max(m_fWindupSeconds, 0.1);
+		if (automatic)
+			Print(string.Format("[CGS CATAPULT] EMPTY ARMING AUTO diagnostic windup=%1", windup));
+		else
+			Print(string.Format("[CGS CATAPULT] EMPTY ARMING manual windup=%1", windup));
+		QueueAdvance(windup);
+	}
+
 	bool ServerFireEmpty(IEntity user)
 	{
-		if (!Replication.IsServer() || !CanOffer(user) || !GetGame() || m_iStage != 0)
+		if (!ValidateOperator(user) || m_iStage != 0)
 			return false;
-		BaseWorld world = GetGame().GetWorld();
-		PlayerManager players = GetGame().GetPlayerManager();
-		if (!world || !players)
-			return false;
-		int id = players.GetPlayerIdFromControlledEntity(user);
-		if (id <= 0 || players.GetPlayerControlledEntity(id) != user)
-			return false;
-		float now = world.GetWorldTime() * 0.001;
-		if (now < m_fNextReadyTime)
+		if (GetNowSeconds() < m_fNextReadyTime)
 			return false;
 
-		m_fStageTime = Math.Max(m_fWindupSeconds, 0.1);
-		m_iStage = 4;
-		m_fNextReadyTime = now + Math.Max(m_fCooldownSeconds, 1.0);
-		Print(string.Format("[CGS CATAPULT] EMPTY ARMING operator=%1 windup=%2 (no target required)", id, m_fStageTime));
+		StartEmptyCycle(false);
 		return true;
 	}
 
 	bool ServerLaunchPlayer(IEntity user)
 	{
-		if (!Replication.IsServer() || !CanOffer(user) || !GetGame())
+		if (!ValidateOperator(user) || m_iStage != 0)
 			return false;
-		if (m_iStage != 0)
-			return false;
-
-		BaseWorld world = GetGame().GetWorld();
-		PlayerManager players = GetGame().GetPlayerManager();
-		if (!world || !players)
-			return false;
-
-		int id = players.GetPlayerIdFromControlledEntity(user);
-		if (id <= 0 || players.GetPlayerControlledEntity(id) != user)
-			return false;
-
-		float now = world.GetWorldTime() * 0.001;
-		if (now < m_fNextReadyTime)
+		if (GetNowSeconds() < m_fNextReadyTime)
 			return false;
 
 		Physics body = user.GetPhysics();
 		if (!body)
 		{
-			Print("[CGS CATAPULT] Refused: player has no physics body", LogLevel.WARNING);
+			Print("[CGS CATAPULT] Refused: character physics body missing", LogLevel.WARNING);
 			return false;
 		}
 
-		vector forward = GetLaunchDirection();
-		if (forward.LengthSq() < 0.01)
+		vector direction = GetLaunchDirection();
+		if (direction.LengthSq() < 0.01)
 		{
 			Print("[CGS CATAPULT] Refused: launch direction missing", LogLevel.WARNING);
 			return false;
 		}
 
 		float forwardSpeed = Math.Clamp(m_fForwardSpeed, 0, 35);
-		float upSpeed = Math.Clamp(m_fUpSpeed, 0, 25);
-		if (forwardSpeed + upSpeed < 0.1)
+		float upwardSpeed = Math.Clamp(m_fUpSpeed, 0, 25);
+		if (forwardSpeed + upwardSpeed < 0.1)
 			return false;
 
-		m_vLaunchVelocity = forward * forwardSpeed + vector.Up * upSpeed;
+		m_vLaunchVelocity = direction * forwardSpeed + vector.Up * upwardSpeed;
 		m_pTestPlayer = user;
-		m_fStageTime = Math.Max(m_fWindupSeconds, 0.0);
 		m_iStage = 1;
-		m_fNextReadyTime = now + Math.Max(m_fCooldownSeconds, 1.0);
-		Print(string.Format("[CGS CATAPULT] ARMING player=%1 velocity=%2 windup=%3", id, m_vLaunchVelocity, m_fStageTime));
+		m_fNextReadyTime = GetNowSeconds() + Math.Max(m_fCooldownSeconds, 1.0);
+		Print(string.Format("[CGS CATAPULT] ARMING player=%1 velocity=%2 windup=%3",
+			GetGame().GetPlayerManager().GetPlayerIdFromControlledEntity(user), m_vLaunchVelocity, m_fWindupSeconds));
+		QueueAdvance(Math.Max(m_fWindupSeconds, 0.1));
 		return true;
 	}
 
-	override void EOnFrame(IEntity owner, float timeSlice)
+	// Server-only scheduled transitions. No EntityEvent.FRAME.
+	protected void AdvanceStage()
 	{
-		if (!Replication.IsServer())
+		if (m_bWasDeleted || !Replication.IsServer() || !GetOwner())
 			return;
 
-		float dt = Math.Max(timeSlice, 0.0);
-		if (m_bAutoEmptyTestPending)
-		{
-			m_fAutoEmptyTestCountdown -= dt;
-			if (m_fAutoEmptyTestCountdown <= 0)
-			{
-				m_bAutoEmptyTestPending = false;
-				if (m_iStage == 0)
-				{
-					m_iStage = 4;
-					m_fStageTime = Math.Max(m_fWindupSeconds, 0.1);
-					Print(string.Format("[CGS CATAPULT] EMPTY ARMING AUTO diagnostic (windup=%1) - no button or payload required", m_fStageTime));
-				}
-				else
-					Print("[CGS CATAPULT] Auto diagnostic skipped; another firing cycle is running");
-			}
-		}
-		if (m_iStage == 0)
-			return;
-
-		// Empty firing cycle runs independently of any character/vehicle entity.
 		if (m_iStage == 4)
 		{
-			m_fStageTime -= dt;
-			if (m_fStageTime > 0)
-				return;
-			Print("[CGS CATAPULT] EMPTY FIRE CUE (animation not yet connected)");
+			Print("[CGS CATAPULT] EMPTY FIRE CUE (visual arm animation not connected)");
 			m_iStage = 5;
-			m_fStageTime = Math.Max(m_fEmptyResetSeconds, 0.1);
+			QueueAdvance(Math.Max(m_fEmptyResetSeconds, 0.1));
 			return;
 		}
 		if (m_iStage == 5)
 		{
-			m_fStageTime -= dt;
-			if (m_fStageTime > 0)
-				return;
-			Print("[CGS CATAPULT] EMPTY RESET complete; ready after cooldown");
-			m_iStage = 0;
+			Print("[CGS CATAPULT] EMPTY RESET complete");
+			ResetStage();
 			return;
 		}
+
+		if (m_iStage < 1 || m_iStage > 3)
+			return;
 		if (!m_pTestPlayer || !m_pTestPlayer.GetPhysics())
 		{
-			Print("[CGS CATAPULT] Launch cancelled: target/player physics unavailable", LogLevel.WARNING);
-			m_pTestPlayer = null;
-			m_iStage = 0;
+			Print("[CGS CATAPULT] Launch cancelled: target physics unavailable", LogLevel.WARNING);
+			ResetStage();
 			return;
 		}
 
 		if (m_iStage == 1)
 		{
-			m_fStageTime -= dt;
-			if (m_fStageTime > 0)
-				return;
-
-			// One release lift, NOT a per-frame scripted trajectory.
-			// Needed even when standing on a raised catapult tray: the character
-			// controller may be grounded against the tray rather than terrain.
 			vector before = m_pTestPlayer.GetOrigin();
 			vector after = before + vector.Up * Math.Clamp(m_fReleaseLift, 0.4, 2.0);
 			m_pTestPlayer.SetOrigin(after);
 			m_iStage = 2;
-			m_fStageTime = Math.Max(m_fReleaseDelay, 0.04);
 			Print(string.Format("[CGS CATAPULT] RELEASE lifted once from=%1 to=%2", before, after));
+			QueueAdvance(Math.Max(m_fReleaseDelay, 0.04));
 			return;
 		}
-
 		if (m_iStage == 2)
 		{
-			m_fStageTime -= dt;
-			if (m_fStageTime > 0)
-				return;
-
 			Physics body = m_pTestPlayer.GetPhysics();
 			m_vProbeStart = m_pTestPlayer.GetOrigin();
-			m_fProbeElapsed = 0;
 			body.SetVelocity(m_vLaunchVelocity);
 			m_iStage = 3;
-			Print(string.Format("[CGS CATAPULT] FIRED assigned=%1 actualPhysicsVelocity=%2", m_vLaunchVelocity, body.GetVelocity()));
+			Print(string.Format("[CGS CATAPULT] FIRED assigned=%1 actualPhysicsVelocity=%2",
+				m_vLaunchVelocity, body.GetVelocity()));
+			QueueAdvance(0.4);
 			return;
 		}
-
 		if (m_iStage == 3)
 		{
-			m_fProbeElapsed += dt;
-			if (m_fProbeElapsed < 0.40)
-				return;
-
-			vector nowPos = m_pTestPlayer.GetOrigin();
-			float moved = vector.Distance(nowPos, m_vProbeStart);
-			Print(string.Format("[CGS CATAPULT] PROBE after=%1s moved=%2m pos=%3", m_fProbeElapsed, moved, nowPos));
+			vector nowPosition = m_pTestPlayer.GetOrigin();
+			float moved = vector.Distance(nowPosition, m_vProbeStart);
+			Print(string.Format("[CGS CATAPULT] PROBE after=0.4s moved=%1m pos=%2", moved, nowPosition));
 			if (moved < 0.2)
-				Print("[CGS CATAPULT] Player appears blocked or controller cancelled velocity", LogLevel.WARNING);
-			m_pTestPlayer = null;
-			m_iStage = 0;
+				Print("[CGS CATAPULT] WARNING: controller blocked or cancelled native velocity", LogLevel.WARNING);
+			ResetStage();
 		}
 	}
 
 	override void OnDelete(IEntity owner)
 	{
-		m_pTestPlayer = null;
-		m_iStage = 0;
+		m_bWasDeleted = true;
+		ScriptCallQueue queue = GetQueue();
+		if (queue)
+		{
+			queue.Remove(StartAutoEmptyTest);
+			queue.Remove(AdvanceStage);
+		}
+		ResetStage();
 		super.OnDelete(owner);
 	}
 }
