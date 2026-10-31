@@ -90,3 +90,25 @@ Existing class names, action method signatures, editor configuration fields, and
 If I only get the INIT line or a callQueue unavailable warning, I must inspect the new startup log and Workbench state. If the empty cycle completes, I then try the player launch after cooldown and inspect RELEASE/FIRED/PROBE. A successful callback chain still doesn't prove native character physics moves or the arm model animates.
 
 **Status:** GitHub source commit completed; not compiled in Workbench by me. Actual lowered model and visual animation are separate, unfinished tasks.
+
+
+## Phase 1 verified in Workbench — native player launch (2026-10-31)
+
+I tested the CallQueue version on Enfusion **1.8.0.13** in an offline Workbench session. The catapult prefab initialized correctly with `callQueue=1 autoEmpty=1 delay=3`. The automatic no-payload test completed every step: `AUTO EMPTY callback reached`, `EMPTY ARMING AUTO diagnostic`, `EMPTY FIRE CUE`, and `EMPTY RESET complete`.
+
+I successfully used both visible interaction actions:
+- `CATAPULT: FIRE EMPTY (TEST)`: server action invocation logged, manual EMPTY ARMING/FIRE CUE/RESET completed.
+- `CATAPULT: LAUNCH PLAYER (TEST)`: server action invocation, ARMING, RELEASE, FIRED, and movement PROBE were all logged.
+
+For the first player launch, my log showed velocity `<-2.85567,6,0.919329>` and a **1.9553 m displacement 0.4 seconds after velocity assignment**. That validates actual native physics movement, not just the velocity assignment. Another launch progressed through FIRED but that pasted log ended before its next PROBE entry. This does not yet prove dedicated-server client replication, safe landing, moving vehicle physics, or camera quality.
+
+Because the automatic fire was only a diagnostic and **its full cycle passed**, I turned it **off** on the existing prefab by changing `m_bAutoEmptyTestOnSpawn 0`. This prevents the prop from firing once automatically after every spawn. The opt-in test code remains in `CGS_CatapultComponent.c` for future diagnosis. The two manual interaction actions remain enabled.
+
+### Next milestone: real arm firing
+I need to:
+1. Re-export my original rigged `capapult.fbx` from Blender so the arm **spawns lowered**. The helper is `Tools/Blender/CGS_Catapult_Lowered_Rest_Export.py`. The existing imported FBX is still in its original raised pose until I replace/reimport it.
+2. Make a correct Enfusion animation graph / animation instance for the existing rigged arm and firing animation. Merely importing the `.anm` metadata doesn't make the static destructible prefab play an animation.
+3. Trigger the animation at FIRE, align the **player/vehicle impulse with the release frame**, and reset the arm after firing. At present the player lift happens after a configurable 0.5 second windup; the new visual sequence must be timed to match.
+4. Add reliable payload detection and separate vehicle physics tests, then multiplayer replication and safety checks.
+
+**Keep the current CallQueue launch system**; do not regress to EOnFrame. All notes here describe my own testing and work.
