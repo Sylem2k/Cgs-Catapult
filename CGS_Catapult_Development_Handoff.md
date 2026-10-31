@@ -1,29 +1,36 @@
-# CGS Catapult - Phase 1 handoff (2026-10-30)
+# CGS Catapult — development handoff (2026-10-30)
 
-I pushed the Phase 1 native-player-launch test scripts to this repository:
-- `Scripts/Game/CGS_Catapult/CGS_CatapultComponent.c`
-- `Scripts/Game/CGS_Catapult/CGS_CatapultLaunchAction.c`
+## What I just changed
 
-The model is imported as `Common/Models/capapult.fbx` / `capapult.xob`.
-The current prefab is `Prefabs/Props/Core/Destructible_Cata_Base.et`, which has a static RigidBody.
+I found that my prefab already listed `CGS_CatapultLaunchAction`, but the required `CGS_CatapultComponent` was absent. As a result, CanBeShownScript always failed and the launch button was invisible.
 
-## My Workbench setup
+I wired `CGS_CatapultComponent` into `Prefabs/Props/Core/Destructible_Cata_Base.et`, expanded the test radius to 12 m, and added `CGS_CatapultFireEmptyAction` alongside the original self-launch action. The empty action works with **nothing on the tray**: it logs ARMING -> FIRE CUE -> RESET and checks server-side action and cooldown execution. It does **not** animate the physical arm yet.
 
-1. Pull `main` in GitHub Desktop.
-2. Open `Destructible_Cata_Base.et`.
-3. Add `CGS_CatapultComponent` to the root entity.
-4. Add `ActionsManagerComponent`, with `CGS_CatapultLaunchAction` in its actions list.
-5. Configure the optional `LaunchPoint` gizmo at the open nose of the throwing tray, orienting local blue +Z outward. Otherwise the component uses the entity local +X axis.
-6. Spawn on a clear test map, approach the tray, and activate `CATAPULT: LAUNCH PLAYER (TEST)`.
-7. Look for `[CGS CATAPULT] ARMING`, `RELEASE`, `FIRED`, and `PROBE` in the log.
+I also added `Tools/Blender/CGS_Catapult_Lowered_Rest_Export.py`. The catapult's FBX was originally exported with the tray raised (-12 degrees). This Blender script takes my original `CGS_Catapult_Rigged.blend` scene, lowers the default arm pose to +32 degrees, rewrites the firing action from lowered -> up -> lowered, and exports `capapult.fbx` again under its existing name. This requires me to run Blender and reimport the updated FBX through Workbench before the in-game catapult will actually appear lowered.
 
-Initial speeds are 3 m/s forward, 6 m/s upward, single 1.2 m grounded-character release lift, 0.08 second delay, 8 second cooldown. The component applies one native physics velocity change and probes displacement 0.4 seconds later.
+## Current files
 
-**Status:** committed source scripts; not yet compiled in Enfusion Workbench or tested in multiplayer. This only launches the player activating the action, not vehicles or others on the tray. It does not yet synchronize the arm animation or provide safe landing. Test only in a disposable scenario.
+- `Scripts/Game/CGS_Catapult/CGS_CatapultComponent.c`: Phase 1 player native-velocity launch + payload-free firing state.
+- `Scripts/Game/CGS_Catapult/CGS_CatapultLaunchAction.c`: launches the player who interacts, not yet cars or other payloads.
+- `Scripts/Game/CGS_Catapult/CGS_CatapultFireEmptyAction.c`: empty cycle, available without a target.
+- `Prefabs/Props/Core/Destructible_Cata_Base.et`: component and both actions wired.
+- `Tools/Blender/CGS_Catapult_Lowered_Rest_Export.py`: lowered pose re-export.
+- `Common/Models/capapult.fbx`: original imported FBX; **not yet replaced with lowered export**.
 
-## Next
-- Fix any Workbench compile errors.
-- Confirm action visibility and flight direction.
-- Confirm server/client flight replication and camera behavior.
-- Add vehicle-specific detection/physics test.
-- Connect the launch event to the firing animation.
+## My next test
+
+1. I pull `main` through GitHub Desktop.
+2. I open Workbench and compile Game scripts. If errors show up, I capture their exact file and line number.
+3. I spawn `Destructible_Cata_Base.et` and walk up to the existing action context on the catapult.
+4. I activate **CATAPULT: FIRE EMPTY (TEST)**. I expect server logs for EMPTY ARMING, EMPTY FIRE CUE, EMPTY RESET; I do not expect the model to move.
+5. I activate **CATAPULT: LAUNCH PLAYER (TEST)** on clear ground and check the native-physics probe output.
+6. To fix the actual *raised visual rest pose*, I open the ORIGINAL generated `CGS_Catapult_Rigged.blend` in Blender, run the new Blender tool, copy the exported `capapult.fbx` into `Common/Models/`, reimport it, then commit/push the modified binary resource in GitHub Desktop.
+7. After that, I configure a Workbench animation controller for the `CGS_Catapult_Fire` .anm and wire the firing action to it. This is **not implemented** yet; the static prefab's RigidBody collision also needs redesign before arm motion can be reliable.
+
+## Safety / limits
+
+This is uncompiled first-pass Enfusion code; don't treat a successful commit as a compile or multiplayer test. The empty fire has no physical payload and currently provides timing/log tests only. The player-launch test uses a one-time position lift then server physics SetVelocity and is unsafe near roofs, on obstacles, or for public gameplay. Vehicle physics, automatic tray target detection, occupied vehicle handling, and animation playback are future phases.
+
+## Process
+
+I keep the original `capapult.fbx` and Enfusion script filenames, push code updates to this repository, and maintain these notes in first person.
