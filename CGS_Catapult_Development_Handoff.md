@@ -69,3 +69,24 @@ To isolate the problem without needing a car, a passenger, or even a visible F-m
 
 **My next test:** Pull `main`, compile Game scripts, and reload a fresh world instance. Without touching the controls, I watch the log for the three AUTO EMPTY phase messages. If they appear but the F-menu is missing, the failure is action visibility/selection rather than frame timing. If only the startup message appears, I must investigate whether `EOnFrame` is called on this static destructible entity. The FBX is still originally posed raised and the catapult arm visual animation is still not connected; the automatic test does not falsely claim either is working. I must send the Workbench compiler errors exactly if compilation fails.
 
+
+
+## Firing timer fix — static prefab / no FRAME callbacks (2026-10-31)
+
+My latest Workbench log showed `[CGS CATAPULT] Component initialized on server; emptyAutoTest=1 after=3 seconds` but never displayed `EMPTY ARMING AUTO diagnostic` or subsequent firing stages. I had also seen a manual `ARMING player=1` without the later `RELEASE` or `FIRED` lines. This strongly points to my static `SCR_DestructibleEntity` not getting the `EOnFrame` updates that my controller depended on, although the log alone doesn't establish the exact engine reason.
+
+I inspected `CGS_MechEngineComponent.c` in `Sylem2k/Mech-Core-CGS`. That component already uses `GetGame().GetCallqueue().CallLater(FinishStartup, ms, false, ...)` for timed server events. The shield component also uses `ScriptCallQueue.Remove` for cleanup.
+
+**I changed the entire existing `Scripts/Game/CGS_Catapult/CGS_CatapultComponent.c`** to use call-queue callbacks instead of `EOnFrame`. On server initialization it now schedules `StartAutoEmptyTest` after the configured three seconds. That starts a one-off empty cycle; `AdvanceStage` handles empty FIRE CUE and RESET with one-shot scheduled calls. The manual player action uses the same `AdvanceStage` to progress ARMING -> RELEASE -> FIRED -> PROBE. `OnDelete` removes pending callbacks so a destroyed catapult won't continue to fire.
+
+Existing class names, action method signatures, editor configuration fields, and script filename are preserved. The test prefab still has `m_bAutoEmptyTestOnSpawn 1` and `m_fAutoEmptyTestDelaySeconds 3` **for diagnosis only**; I will disable that before normal use.
+
+**My next test:** Pull `main`, reload Workbench and compile the Game module. I should get an INIT line including `callQueue=1` and a scheduled delay. Roughly three seconds into a running game, without pressing a button, I should get:
+- `[CGS CATAPULT] AUTO EMPTY callback reached; starting cycle`
+- `[CGS CATAPULT] EMPTY ARMING AUTO diagnostic`
+- `[CGS CATAPULT] EMPTY FIRE CUE`
+- `[CGS CATAPULT] EMPTY RESET complete`
+
+If I only get the INIT line or a callQueue unavailable warning, I must inspect the new startup log and Workbench state. If the empty cycle completes, I then try the player launch after cooldown and inspect RELEASE/FIRED/PROBE. A successful callback chain still doesn't prove native character physics moves or the arm model animates.
+
+**Status:** GitHub source commit completed; not compiled in Workbench by me. Actual lowered model and visual animation are separate, unfinished tasks.
