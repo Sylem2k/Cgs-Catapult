@@ -22,26 +22,42 @@ class CGS_CatapultFireEmptyAction : ScriptedUserAction
 		return true;
 	}
 
+	// Show this diagnostic button whenever the player's interaction context is
+	// in range, even if the controller component cannot be found. In that case
+	// the button will be disabled with a reason instead of silently disappearing.
 	override bool CanBeShownScript(IEntity user)
 	{
-		CGS_CatapultComponent catapult = GetCatapult();
-		return catapult && catapult.CanOffer(user);
+		return ChimeraCharacter.Cast(user) != null;
 	}
 
 	override bool CanBePerformedScript(IEntity user)
 	{
-		if (CanBeShownScript(user))
-			return true;
-		SetCannotPerformReason("Move closer to the catapult");
-		return false;
+		CGS_CatapultComponent catapult = GetCatapult();
+		if (!catapult)
+		{
+			SetCannotPerformReason("Catapult component missing");
+			return false;
+		}
+		if (!catapult.CanOffer(user))
+		{
+			SetCannotPerformReason("Catapult disabled or too far away");
+			return false;
+		}
+		return true;
 	}
 
 	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
 	{
 		if (!Replication.IsServer())
 			return;
+		Print("[CGS CATAPULT] FIRE EMPTY action invoked on server");
 		CGS_CatapultComponent catapult = GetCatapult();
-		if (catapult)
-			catapult.ServerFireEmpty(pUserEntity);
+		if (!catapult)
+		{
+			Print("[CGS CATAPULT] FIRE EMPTY refused: controller not found", LogLevel.WARNING);
+			return;
+		}
+		if (!catapult.ServerFireEmpty(pUserEntity))
+			Print("[CGS CATAPULT] FIRE EMPTY refused: range, player, busy state or cooldown", LogLevel.WARNING);
 	}
 }
