@@ -2,6 +2,7 @@ SCR_DestructibleEntity {
  ID "6ABE66AE6D81AB4F"
  components {
   MeshObject "{6ABE66AE6D81AB80}" {
+   Object "{A184F423B3757BCF}Common/Models/capapult.xob"
    LODFactors {
     5 2 1.5 1 1 1
    }
@@ -11,8 +12,29 @@ SCR_DestructibleEntity {
    ModelGeometry 1
    Static 1
   }
+  ActionsManagerComponent "{6ABE6C8B5D9E62A5}" {
+   ActionContexts {
+    UserActionContext "{6ABE6C8B5B6459F7}" {
+     UIInfo UIInfo "{6ABE6C8B588BF331}" {
+      Name "launch"
+     }
+     Position PointInfo "{6ABE6C8B2217AF0F}" {
+      Offset 0 0.721 -5.2091
+     }
+    }
+   }
+   additionalActions {
+    CGS_CatapultLaunchAction "{6ABE6C8B03BDFA42}" {
+     UIInfo UIInfo "{6ABE6C8B125054F5}" {
+      Name "Launch"
+     }
+    }
+   }
+  }
  }
  Flags 0x403 0
+ coords 82.734 4.704 68.815
+ angles 0 -162.155 0
  DamageThreshold 1
  FirstDestructionPhase SCR_BaseDestructionPhase "{6ABE66AE6D81ABF3}" {
  }
